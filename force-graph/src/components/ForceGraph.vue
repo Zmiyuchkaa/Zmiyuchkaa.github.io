@@ -8,193 +8,208 @@ import * as d3 from "d3";
 export default {
   name: "ForcedGraph",
   data: () => ({
-    // nodes: [],
-    // links: [],
+    nodes: [],
+    links: [],
+
+    // mouse coordinates we save on each mouse move.
+    mouse: null,
+
+    // for creating link between the nodes
+    isCreatingLink: false,
+    nodeFrom: null,
+    nodeTo: null,
+    mouselink: null,
+
+    //D3 elements
+    svg: null,
+    linksElem: null,
+    nodesElem: null,
+
+    simulation: null
   }),
+  props: {
+    // viewport width
+    width: {
+      type: Number,
+      default: 500
+    },
+    //viewport height
+    height: {
+      type: Number,
+      default: 500
+    },
+    nodeRadius: {
+      type: Number,
+      default: 5
+    },
+    nodeColor: {
+      type: String,
+      default: "black"
+    },
+    nodeHoveredColor: {
+      type: String,
+      default: "orange"
+    },
+    linkWidth: {
+      type: Number,
+      default: 1.5
+    },
+    linkColor: {
+      type: String,
+      default: "red"
+    }
+  },
   methods: {
     init: function() {
-      let nodes = [];
-      let links = [];
-
-      let width = 500;
-      let height = 500;
-      let minDistanceToConnect = 100;
-      let nodeColor = "black";
-      let nodeRadius = 7;
-      let mouse = null;
-
-      let isCreatingLink = false;
-      let nodeFrom = null;
-      let nodeTo = null;
-
-      const inrange = (source, target) =>
-        Math.hypot(source.x - target.x, target.y - target.y) !== 0;
-
-      const svg = d3
+      this.svg = d3
         .select("#context")
-        .property("value", { nodes: [], links: [] })
-        .attr("viewBox", [-width / 2, -height / 2, width, height])
-        .on("mousedown", onSvgMouseDown)
-        .on("mousemove", onSvgMouseMove)
-        .on("mouseup", onSvgMouseUp);
+        .attr("viewBox", [
+          -this.width / 2,
+          -this.height / 2,
+          this.width,
+          this.height
+        ])
+        .on("mousedown", this.onSvgMouseDown)
+        .on("mousemove", this.onSvgMouseMove)
+        .on("mouseup", this.onSvgMouseUp);
 
       // links
-      let linksElem = svg.append("g").selectAll("line");
+      this.linksElem = this.svg.append("g").selectAll("line");
 
       // nodes
-      let nodesElem = svg.append("g").selectAll("circle");
+      this.nodesElem = this.svg.append("g").selectAll("circle");
 
       // temp link line
-      let mouselink = svg
+      this.mouselink = this.svg
         .append("g")
         .attr("stroke", "red")
         .selectAll("line");
 
-      const simulation = d3
-        .forceSimulation(nodes)
+      this.simulation = d3
+        .forceSimulation(this.nodes)
         .force(
           "link",
-          d3.forceLink(links).id(d => d.index)
+          d3.forceLink(this.links).id(d => d.index)
         )
         .force("charge", d3.forceManyBody().strength(-60))
         .force("x", d3.forceX())
         .force("y", d3.forceY())
-        .on("tick", ticked);
+        .on("tick", this.ticked);
+    },
 
-      function onNodeMouseDown(d, i, svgNodes) {
-        d3.event.stopPropagation();
-        if (isCreatingLink === false) {
-          isCreatingLink = true;
-          nodeFrom = nodes[i];
+    onNodeMouseDown: function(d, i, svgNodes) {
+      d3.event.stopPropagation();
+      if (this.isCreatingLink === false) {
+        this.isCreatingLink = true;
+        this.nodeFrom = this.nodes[i];
+      }
+    },
+
+    onNodeMouseUp: function(d, i, svgNodes) {
+      d3.event.stopPropagation();
+      if (this.isCreatingLink === true) {
+        this.nodeTo = this.nodes[i];
+        if (this.nodeTo == null) {
+          return;
         }
-      }
 
-      function onNodeMouseUp(d, i, svgNodes) {
-        d3.event.stopPropagation();
-        if (isCreatingLink === true) {
-          nodeTo = nodes[i];
-          if (nodeTo == null) {
-            return;
-          }
+        if (this.nodeTo.index === this.nodeFrom.index) {
+          this.nodeFrom = null;
+          this.isCreatingLink = false;
+          this.nodeTo = null;
+          this.nodes.splice(i, 1);
 
-          if (nodeTo.index === nodeFrom.index) {
-            nodeFrom = null;
-            isCreatingLink = false;
-            nodeTo = null;
-            nodes.splice(i, 1);
-
-            links = links.filter(function(l) {
-              return l.source !== d && l.target !== d;
-            });
-
-            nodesElem = nodesElem
-              .data(nodes)
-              .join("circle")
-              .attr("r", nodeRadius)
-              .attr("color", nodeColor)
-              .on("mousedown", (d, i) =>
-                onNodeMouseDown(d, i, nodesElem, simulation)
-              );
-
-            linksElem = linksElem
-              .data(links, d => [d.source.index, d.source.index])
-              .join("line")
-              .attr("stroke", "red")
-              .attr("stroke-width", 1.5);
-
-            simulation.nodes(nodes);
-            simulation.force(
-              "link",
-              d3.forceLink(links).id(d => d.index)
-            );
-
-            simulation.alpha(1).restart();
-            return;
-          }
-
-          links = [...links, { source: nodeFrom, target: nodeTo }];
-
-          linksElem = linksElem
-            .data(links, d => [d.source.index, d.source.index])
-            .join("line")
-            .attr("stroke", "red")
-            .attr("stroke-width", 1.5);
-
-          simulation.nodes(nodes);
-          simulation.force(
-            "link",
-            d3.forceLink(links).id(d => d.index)
-          );
-
-          simulation.alpha(1).restart();
-          isCreatingLink = false;
-          nodeFrom = null;
-          nodeTo = null;
+          this.links = this.links.filter(function(l) {
+            return l.source !== d && l.target !== d;
+          });
+          this.restartSimulation();
+          return;
         }
+
+        this.links = [
+          ...this.links,
+          { source: this.nodeFrom, target: this.nodeTo }
+        ];
+        this.restartSimulation();
+
+        this.isCreatingLink = false;
+        this.nodeFrom = null;
+        this.nodeTo = null;
       }
+    },
 
-      function onNodeMouseOver(d, i, svgNodes) {
-        d3.select(this).attr("fill", "orange");
+    onNodeMouseOver: function(d, i, svgNodes) {
+      d3.select(svgNodes[i]).attr("fill", this.nodeHoveredColor);
+    },
+
+    onNodeMouseOut: function(d, i, svgNodes) {
+      d3.select(svgNodes[i]).attr("fill", this.nodeColor);
+    },
+
+    onSvgMouseMove: function(d, i, svgNodes) {
+      const [x, y] = d3.mouse(svgNodes[i]);
+      this.mouse = { x, y };
+    },
+
+    onSvgMouseUp: function(d, i, svgNodes) {
+      console.log("svg mouseup");
+      if (this.isCreatingLink) {
+        this.isCreatingLink = false;
+        this.nodeFrom = null;
+        this.nodeTo = null;
       }
+    },
 
-      function onNodeMouseOut(d, i, svgNodes) {
-        d3.select(this).attr("fill", nodeColor);
-      }
+    onSvgMouseDown: function(d, i, svgNodes) {
+      d3.event.stopPropagation();
+      const node = { x: this.mouse.x, y: this.mouse.y };
+      this.nodes = [...this.nodes, node];
 
-      function onSvgMouseMove(d, i, svgNodes) {
-        const [x, y] = d3.mouse(this);
-        mouse = { x, y };
-        simulation.alpha(0.3).restart();
-      }
+      this.restartSimulation();
+    },
 
-function onSvgMouseUp(d, i, svgNodes) {
-        console.log("svg mouseup");
-        if (isCreatingLink) {
-          isCreatingLink = false;
-          nodeFrom = null;
-          nodeTo = null;
-        }
-      }
+restartSimulation: function() {
+      this.nodesElem = this.nodesElem
+        .data(this.nodes, d => d.index)
+        .join("circle")
+        .attr("r", this.nodeRadius)
+        .attr("fill", this.nodeColor)
+        .on("mousedown", this.onNodeMouseDown)
+        .on("mouseup", this.onNodeMouseUp)
+        .on("mouseover", this.onNodeMouseOver)
+        .on("mouseout", this.onNodeMouseOut);
 
-      function onSvgMouseDown(d, i, svgNodes) {
-        d3.event.stopPropagation();
-        const [x, y] = d3.mouse(svgNodes[i]);
-        const node = { x, y };
-        nodes = [...nodes, node];
+      this.linksElem = this.linksElem
+        .data(this.links, d => [d.source.index, d.source.index])
+        .join("line")
+        .attr("stroke", this.linkColor)
+        .attr("stroke-width", this.linkWidth);
 
-        nodesElem = nodesElem
-          .data(nodes, d => d.index)
-          .join("circle")
-          .attr("r", nodeRadius)
-          .attr("color", nodeColor)
-          .on("mousedown", onNodeMouseDown)
-          .on("mouseup", onNodeMouseUp)
-          .on("mouseover", onNodeMouseOver)
-          .on("mouseout", onNodeMouseOut);
+      this.simulation.nodes(this.nodes);
+      this.simulation.force(
+        "link",
+        d3.forceLink(this.links).id(d => d.index)
+      );
 
-        simulation.nodes(nodes);
+      this.simulation.alpha(1).restart();
+    },
+    ticked: function() {
+      this.nodesElem.attr("cx", d => d.x).attr("cy", d => d.y);
 
-        simulation.alpha(1).restart();
-      }
+      this.linksElem
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
 
-      function ticked() {
-        nodesElem.attr("cx", d => d.x).attr("cy", d => d.y);
-
-        linksElem
-          .attr("x1", d => d.source.x)
-          .attr("y1", d => d.source.y)
-          .attr("x2", d => d.target.x)
-          .attr("y2", d => d.target.y);
-
-        mouselink = mouselink
-          .data(isCreatingLink ? [nodeFrom] : [])
-          .join("line")
-          .attr("x1", mouse && mouse.x)
-          .attr("y1", mouse && mouse.y)
-          .attr("x2", d => d.x)
-          .attr("y2", d => d.y)
-          .attr("pointer-events", "none");
-      }
+      this.mouselink = this.mouselink
+        .data(this.isCreatingLink ? [this.nodeFrom] : [])
+        .join("line")
+        .attr("x1", this.mouse && this.mouse.x)
+        .attr("y1", this.mouse && this.mouse.y)
+        .attr("x2", d => d.x)
+        .attr("y2", d => d.y)
+        .attr("pointer-events", "none");
     }
   },
   mounted: function() {
