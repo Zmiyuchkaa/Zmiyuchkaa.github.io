@@ -29,6 +29,18 @@ export default {
     simulation: null
   }),
   props: {
+    inputNodes: {
+      type: Array,
+      default: function() {
+        return [];
+      }
+    },
+    inputLinks: {
+      type: Array,
+      default: function() {
+        return [];
+      }
+    },
     // viewport width
     width: {
       type: Number,
@@ -97,9 +109,10 @@ export default {
         .force("y", d3.forceY())
         .on("tick", this.ticked);
 
-      if (this.nodes.length !== 0) {
-        this.restartSimulation();
-      }
+      this.nodes = [...this.inputNodes];
+      this.links = [...this.inputLinks];
+      this.restartSimulation();
+    
     },
 
     onNodeMouseDown: function(d, i, svgNodes) {
