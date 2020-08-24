@@ -8,6 +8,7 @@ import * as d3 from "d3";
 export default {
   name: "ForcedGraph",
   data: () => ({
+
     nodes: [],
     links: [],
 
@@ -48,11 +49,11 @@ export default {
     },
     nodeHoveredColor: {
       type: String,
-      default: "orange"
+      default: "red"
     },
     linkWidth: {
       type: Number,
-      default: 1.5
+      default: 1
     },
     linkColor: {
       type: String,
@@ -95,6 +96,10 @@ export default {
         .force("x", d3.forceX())
         .force("y", d3.forceY())
         .on("tick", this.ticked);
+
+      if (this.nodes.length !== 0) {
+        this.restartSimulation();
+      }
     },
 
     onNodeMouseDown: function(d, i, svgNodes) {
@@ -104,7 +109,7 @@ export default {
         this.nodeFrom = this.nodes[i];
       }
     },
-
+    // creating a circle-node
     onNodeMouseUp: function(d, i, svgNodes) {
       d3.event.stopPropagation();
       if (this.isCreatingLink === true) {
@@ -112,20 +117,20 @@ export default {
         if (this.nodeTo == null) {
           return;
         }
-
+        // click on existed circle-node deleting it
         if (this.nodeTo.index === this.nodeFrom.index) {
           this.nodeFrom = null;
           this.isCreatingLink = false;
           this.nodeTo = null;
           this.nodes.splice(i, 1);
-
+        // and deleting a link
           this.links = this.links.filter(function(l) {
             return l.source !== d && l.target !== d;
           });
           this.restartSimulation();
           return;
         }
-
+      
         this.links = [
           ...this.links,
           { source: this.nodeFrom, target: this.nodeTo }
@@ -137,34 +142,32 @@ export default {
         this.nodeTo = null;
       }
     },
-
+    // hovering circle when mouse on it
     onNodeMouseOver: function(d, i, svgNodes) {
       d3.select(svgNodes[i]).attr("fill", this.nodeHoveredColor);
     },
-
+    // no hover when mouse out of circle
     onNodeMouseOut: function(d, i, svgNodes) {
       d3.select(svgNodes[i]).attr("fill", this.nodeColor);
     },
-
+    // saving mouse coordinates
     onSvgMouseMove: function(d, i, svgNodes) {
       const [x, y] = d3.mouse(svgNodes[i]);
       this.mouse = { x, y };
     },
-
+    // propagating creating a link between circle-nodes if link do not connect one circle-node to another
     onSvgMouseUp: function(d, i, svgNodes) {
-      console.log("svg mouseup");
       if (this.isCreatingLink) {
         this.isCreatingLink = false;
         this.nodeFrom = null;
         this.nodeTo = null;
       }
     },
-
+    // creating a circle-node via click
     onSvgMouseDown: function(d, i, svgNodes) {
       d3.event.stopPropagation();
       const node = { x: this.mouse.x, y: this.mouse.y };
       this.nodes = [...this.nodes, node];
-
       this.restartSimulation();
     },
 
@@ -195,7 +198,7 @@ restartSimulation: function() {
     },
     ticked: function() {
       this.nodesElem.attr("cx", d => d.x).attr("cy", d => d.y);
-
+      // creating a link
       this.linksElem
         .attr("x1", d => d.source.x)
         .attr("y1", d => d.source.y)
